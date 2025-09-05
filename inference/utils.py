@@ -1,7 +1,9 @@
+
 import numpy as np
 import cv2
 import time
 from ultralytics.utils.plotting import Annotator
+from kalman_filter import Tracker
 
 
 class SimpleFPS:
@@ -31,11 +33,11 @@ def draw_fps(img, fps) -> None:
     # putting the FPS count on the frame
     cv2.putText(img, str(fps), (7, 70), font, 3, (100, 255, 0), 3, cv2.LINE_AA)
 
-def draw_annotation(img, label_names, results) -> Annotator:
+def draw_annotation(img, label_names, results, tracker) -> Annotator:
     annotator = None
     # Load camera calibration results
     try:
-        calib = np.load('./adapted/camera_calibration.npz')
+        calib = np.load('./inference/camera_calibration.npz')
         camera_matrix = calib['camera_matrix']
         dist_coeffs = calib['dist_coeffs']
     except Exception as e:
@@ -43,9 +45,22 @@ def draw_annotation(img, label_names, results) -> Annotator:
         dist_coeffs = None
         print(f"Calibration file not found or invalid: {e}")
 
+    found_box = False
+    measurement = None
+    timestamp = time.time()
+
     for r in results:
         annotator = Annotator(img)
         boxes = r.boxes
+
+        # Always show Kalman filter prediction in pink
+        pred = tracker.update(tracker.pos[:2], timestamp)
+        x_pred, y_pred = int(pred[0]), int(pred[1])
+        print(f"KF predicted position: ({x_pred}, {y_pred})")
+
+        cv2.circle(img, (x_pred, y_pred), 8, (255, 0, 255), -1)  # pink
+        cv2.putText(img, "KF predicted", (x_pred+10, y_pred), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,0,255), 2)
+
         for box in boxes:
             b = box.xyxy[0]  # get box coordinates in (top, left, bottom, right) format
             c = box.cls
@@ -53,16 +68,20 @@ def draw_annotation(img, label_names, results) -> Annotator:
             # Draw a dot/circle at the center of the box
             x_center = int((b[0] + b[2]) / 2)
             y_center = int((b[1] + b[3]) / 2)
+            print(f"Box center: ({x_center}, {y_center})")
             cv2.circle(img, (x_center, y_center), 6, (0, 0, 255), -1)
+            # tracker = Tracker(id=0, initial_position=(x_center, y_center, 0, 0))
+            found_box = True
+            measurement = (x_center, y_center)
             D = 67 # true tennis ball diameter mm approx
             # Use solvePnP if calibration is available
             if camera_matrix is not None and dist_coeffs is not None:
                 pos = solvepnp_from_bbox(b, img.shape, camera_matrix, dist_coeffs, D)
                 if pos is not None:
                     x, y, z = pos
-                    print(f'SolvePnP ball position (mm): x={x:.1f}, y={y:.1f}, z={z:.1f}')
+                    # print(f'SolvePnP ball position (mm): x={x:.1f}, y={y:.1f}, z={z:.1f}')
                     cv2.putText(img, f"SolvePnP: x={x:.1f}, y={y:.1f}, z={z:.1f}", 
-                                (x_center+20, y_center), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                                (x_center-140, y_center+60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
                 else:
                     print('SolvePnP failed for this box.')
             else:
@@ -72,6 +91,10 @@ def draw_annotation(img, label_names, results) -> Annotator:
                 print(f'Estimated ball position (mm): x={x:.1f}, y={y:.1f}, z={z:.1f}')
                 cv2.putText(img, f"Estimated: x={x:.1f}, y={y:.1f}, z={z:.1f}", 
                             (x_center+20, y_center), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+    # After processing boxes, update Kalman filter if measurement is available
+    if found_box and measurement is not None:
+        tracker.update(measurement, timestamp)
 
     if annotator is not None:
         annotated_img = annotator.result()

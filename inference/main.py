@@ -10,6 +10,7 @@ from yolomanager import YoloDetectorWrapper
 from utils import SimpleFPS, draw_fps, draw_annotation
 import argparse
 import time
+from kalman_filter import Tracker
 
 # Video capture thread for Raspberry Pi Camera
 class VideoThreadPiCam(QThread):
@@ -56,6 +57,7 @@ class App(QWidget):
         self.image_label.resize(self.display_width, self.display_height)
 
         self.fps_util = SimpleFPS()
+        self.tracker = Tracker(id=0, initial_position=(0, 0, 0, 0))
 
         # create a vertical box layout and add the two labels
         vbox = QVBoxLayout()
@@ -77,7 +79,7 @@ class App(QWidget):
             display_img = cv_img
         else:
             results = self.yolo_detector.predict(cv_img)
-            display_img = draw_annotation(cv_img, self.yolo_detector.get_label_names(), results)
+            display_img = draw_annotation(cv_img, self.yolo_detector.get_label_names(), results, self.tracker)
 
 
         fps, _ = self.fps_util.get_fps()
