@@ -49,17 +49,17 @@ def draw_annotation(img, label_names, results, tracker) -> Annotator:
     measurement = None
     timestamp = time.time()
 
+    # Always show Kalman filter prediction in pink
+    pred = tracker.update(tracker.pos[:2], timestamp)
+    x_pred, y_pred, vx_pred, vy_pred = int(pred[0]), int(pred[1]), int(pred[2]), int(pred[3])
+    print(f"KF predicted position: ({x_pred}, {y_pred}) velocity: ({vx_pred}, {vy_pred}) ")
+
+    cv2.circle(img, (x_pred, y_pred), 8, (255, 0, 255), -1)  # pink
+    cv2.putText(img, "KF predicted", (x_pred+10, y_pred), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,0,255), 2)
+
     for r in results:
         annotator = Annotator(img)
         boxes = r.boxes
-
-        # Always show Kalman filter prediction in pink
-        pred = tracker.update(tracker.pos[:2], timestamp)
-        x_pred, y_pred = int(pred[0]), int(pred[1])
-        print(f"KF predicted position: ({x_pred}, {y_pred})")
-
-        cv2.circle(img, (x_pred, y_pred), 8, (255, 0, 255), -1)  # pink
-        cv2.putText(img, "KF predicted", (x_pred+10, y_pred), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,0,255), 2)
 
         for box in boxes:
             b = box.xyxy[0]  # get box coordinates in (top, left, bottom, right) format

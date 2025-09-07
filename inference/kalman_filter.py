@@ -11,23 +11,24 @@ class Tracker():
         self.pos = initial_position
         self.kf = cv2.KalmanFilter(4, 2)  # 4 state variables, 2 measurement variables
         # x, y, dx, dy
-        self.q = 0.2 # increase process noise to slow prediction
         self.last_update_time = None
 
-        # Measurement matrix
+        # Measurement matrix H
         self.kf.measurementMatrix = np.array([
             [1, 0, 0, 0],
             [0, 1, 0, 0]
         ], np.float32)
 
+        # Process noise covariance Q
         self.kf.processNoiseCov = np.array([
-            [1, 0, 1, 0],
-            [0, 1, 0, 1],
-            [0, 0, 10, 0],
-            [0, 0, 0, 10]
-        ], np.float32) * self.q
+            [20, 0, 0, 0],
+            [0, 20, 0, 0],
+            [0, 0, 20, 0],
+            [0, 0, 0, 20]
+        ], np.float32)
 
         # Lower measurement noise to make filter snap to measurements
+        # R
         self.kf.measurementNoiseCov = np.array([
             [0.001, 0],
             [0, 0.001]
@@ -51,10 +52,10 @@ class Tracker():
         self.last_update_time = timestamp
 
         # Update transition matrix with dt, dampen velocity effect
-        velocity_damping = 0.3  # lower = slower movement
+        # transition matrix A
         self.kf.transitionMatrix = np.array([
-            [1, 0, velocity_damping * dt, 0],
-            [0, 1, 0, velocity_damping * dt],
+            [1, 0, dt, 0],
+            [0, 1, 0, dt],
             [0, 0, 1, 0],
             [0, 0, 0, 1]
         ], np.float32)
